@@ -1,0 +1,5 @@
+{
+  "name": "VoucherHub",
+  "description": "Multi-tenant voucher management system with secure payment integration and admin dashboard.",
+  "requestFramePermissions": []
+}

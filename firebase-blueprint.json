@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "House": {
+      "title": "House",
+      "description": "Represents a tenant or location.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "location"]
+    },
+    "Plan": {
+      "title": "Plan",
+      "description": "Represents a voucher plan (e.g., 1 hour, 1 day).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "houseId": { "type": "string" },
+        "name": { "type": "string" },
+        "duration": { "type": "string" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["houseId", "name", "duration", "price"]
+    },
+    "Voucher": {
+      "title": "Voucher",
+      "description": "Represents a unique voucher code.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "houseId": { "type": "string" },
+        "planId": { "type": "string" },
+        "status": { "type": "string", "enum": ["unused", "used", "expired"] },
+        "transactionId": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "houseId", "planId", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Represents a payment transaction.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "houseId": { "type": "string" },
+        "planId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "reference": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["houseId", "planId", "amount", "status", "reference"]
+    },
+    "Log": {
+      "title": "Log",
+      "description": "System log for tracking events.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["payment", "voucher_assignment", "error", "admin_action"] },
+        "message": { "type": "string" },
+        "details": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "message"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/houses/{houseId}": {
+      "schema": "House",
+      "description": "Collection of houses."
+    },
+    "/plans/{planId}": {
+      "schema": "Plan",
+      "description": "Collection of plans."
+    },
+    "/vouchers/{voucherId}": {
+      "schema": "Voucher",
+      "description": "Collection of vouchers."
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Collection of transactions."
+    },
+    "/logs/{logId}": {
+      "schema": "Log",
+      "description": "Collection of system logs."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles."
+    }
+  }
+}

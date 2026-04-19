@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ───────────────────────────────────────────
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // Server-side admin SDK bypasses these rules entirely.
+    // For client-side reads/writes, we check either the custom token claim
+    // or the 'role' field in the users collection.
+    function isAdmin() {
+      return isAuthed() && (
+        request.auth.token.admin == true ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
+    }
+
+    function myEmail() {
+      // request.auth.token.email is set by Firebase Auth and cannot be
+      // spoofed by the client — safer than comparing to a user-supplied field.
+      return request.auth.token.email;
+    }
+
+    // ─── Houses ────────────────────────────────────────────
+    // Publicly readable so guests can pick a house without signing in.
+    match /houses/{houseId} {
+      allow read:             if true;
+      allow create, update:   if isAdmin()
+                                && request.resource.data.keys().hasAll(['name','location'])
+                                && request.resource.data.name   is string
+                                && request.resource.data.name.size() > 0
+                                && request.resource.data.location is string;
+      allow delete:           if isAdmin();
+    }
+
+    // ─── Plans ─────────────────────────────────────────────
+    match /plans/{planId} {
+      allow read:             if true;
+      allow create, update:   if isAdmin()
+                                && request.resource.data.keys().hasAll(['houseId','name','duration','price'])
+                                && request.resource.data.price is number
+                                && request.resource.data.price >= 0;
+      allow delete:           if isAdmin();
+    }
+
+    // ─── Vouchers ──────────────────────────────────────────
+    // Unused vouchers are never shown to regular users (codes must stay secret).
+    // A used voucher can be fetched explicitly by its ID by the customer (Result page),
+    // but listing/querying is restricted to admins or the authenticated customer.
+    match /vouchers/{voucherId} {
+      // Allow reading a specific used voucher if its doc ID is known
+      allow get:    if isAdmin() || resource.data.status == 'used';
+
+      // Keep list restricted to prevent scanning
+      allow list:   if isAdmin()
+                      || (
+                           isAuthed()
+                           && resource.data.status == 'used'
+                           && resource.data.customerEmail == myEmail()
+                         );
+
+      // All writes go through the server-side Admin SDK — client cannot touch this.
+      allow write:  if isAdmin();
+    }
+
+    // ─── Transactions ──────────────────────────────────────
+    match /transactions/{txId} {
+      allow read:   if isAdmin()
+                      || (isAuthed() && resource.data.customerEmail == myEmail());
+      allow write:  if isAdmin();
+    }
+
+    // ─── Users ─────────────────────────────────────────────
+    match /users/{userId} {
+      allow read:   if isAuthed() && request.auth.uid == userId;
+
+      // Users can create their own document, but ONLY with role='user'.
+      // The first admin must be set via Firebase console or Admin SDK.
+      allow create: if isAuthed()
+                      && request.auth.uid == userId
+                      && request.resource.data.keys().hasAll(['email','role'])
+                      && request.resource.data.role == 'user'
+                      && request.resource.data.email is string
+                      && request.resource.data.email.size() <= 254
+                      && request.resource.data.email == myEmail();
+
+      // Users can update their own profile, but cannot change their own role.
+      // Only admins can promote/demote users.
+      allow update: if isAdmin()
+                      || (
+                           isAuthed()
+                           && request.auth.uid == userId
+                           && request.resource.data.role == resource.data.role
+                         );
+
+      allow delete: if isAdmin();
+    }
+
+    // ─── Logs ──────────────────────────────────────────────
+    // Written exclusively by the server-side Admin SDK; readable by admins only.
+    match /logs/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+  }
+}
