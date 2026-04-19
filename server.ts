@@ -158,10 +158,10 @@ function buildVoucherEmailHtml(voucherCode: string, reference: string, planName:
 </div>`;
 }
 
-async function sendVoucherEmail(to: string, voucherCode: string, reference: string, planName: string, amount: number): Promise<void> {
+async function sendVoucherEmail(to: string, voucherCode: string, reference: string, planName: string, amount: number): Promise<boolean> {
   if (!resend || !to) {
     console.log("Email skipped — RESEND_API_KEY not configured or no recipient.");
-    return;
+    return false;
   }
   try {
     await resend.emails.send({
@@ -171,8 +171,10 @@ async function sendVoucherEmail(to: string, voucherCode: string, reference: stri
       html: buildVoucherEmailHtml(voucherCode, reference, planName, amount),
     });
     console.log(`Email sent to ${to} for ref ${reference}`);
+    return true;
   } catch (err: any) {
     console.error("Email send failed:", err.message);
+    return false;
   }
 }
 
@@ -377,18 +379,19 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
     });
 
     // Send email & write log after successful transaction
+    let emailSent = false;
     if (!result.alreadyProcessed && result.code) {
       try {
         const planDoc = await db.collection("plans").doc(planId).get();
         const planName = planDoc.exists ? planDoc.data()?.name || "N/A" : "N/A";
-        await sendVoucherEmail(verifiedEmail, result.code, reference, planName, data.amount / 100);
+        emailSent = await sendVoucherEmail(verifiedEmail, result.code, reference, planName, data.amount / 100);
         await writeLog("payment_voucher_assigned", `Voucher ${result.code} assigned to ${verifiedEmail} (ref: ${reference})`);
       } catch (err) {
         console.error("Post-transaction email/log failed:", err);
       }
     }
 
-    return res.status(200).json({ success: true, ...result });
+    return res.status(200).json({ success: true, emailSent, ...result });
   } catch (error: any) {
     if (error.message === "Out of stock") {
       return res.status(400).json({ error: "No vouchers available for this plan. Please contact support." });

@@ -630,7 +630,13 @@ const PaymentPage = () => {
 
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Payment completion failed.");
-      toast.success("Payment successful! Check your email for your voucher code.");
+      
+      if (result.emailSent) {
+        toast.success("Payment successful! Check your email for your voucher code.");
+      } else {
+        toast.success("Payment successful! Please copy your voucher code below.");
+      }
+      
       navigate(`/result/${result.voucherId}`);
     } catch (err: any) {
       toast.error(err.message ?? "Payment failed. Please contact support.");
@@ -764,37 +770,36 @@ const ResultPage = () => {
   useEffect(() => {
     if (!voucherId) return;
     
-    const unsubscribe = onSnapshot(doc(db, 'vouchers', voucherId), async (vDoc) => {
-      if (vDoc.exists()) {
-        const vData = { id: vDoc.id, ...vDoc.data() } as Voucher;
-        setVoucher(vData);
-        
-        // Fetch plan and house if not already fetched
-        setPlan(prev => {
-          if (!prev || prev.id !== vData.planId) {
-            getDoc(doc(db, 'plans', vData.planId)).then(pDoc => {
-              if (pDoc.exists()) setPlan({ id: pDoc.id, ...pDoc.data() } as Plan);
-            });
-          }
-          return prev;
-        });
-        
-        setHouse(prev => {
-          if (!prev || prev.id !== vData.houseId) {
-            getDoc(doc(db, 'houses', vData.houseId)).then(hDoc => {
-              if (hDoc.exists()) setHouse({ id: hDoc.id, ...hDoc.data() } as House);
-            });
-          }
-          return prev;
-        });
-      }
-      setLoading(false);
-    }, (error) => {
-      console.error("Error listening to voucher:", error);
-      setLoading(false);
-    });
+    let isMounted = true;
 
-    return () => unsubscribe();
+    const fetchVoucher = async () => {
+      try {
+        const vDoc = await getDoc(doc(db, 'vouchers', voucherId));
+        if (vDoc.exists()) {
+          const vData = { id: vDoc.id, ...vDoc.data() } as Voucher;
+          if (isMounted) setVoucher(vData);
+          
+          // Fetch plan and house details explicitly
+          const pDocPromise = getDoc(doc(db, 'plans', vData.planId));
+          const hDocPromise = getDoc(doc(db, 'houses', vData.houseId));
+          
+          const [pDoc, hDoc] = await Promise.all([pDocPromise, hDocPromise]);
+          
+          if (isMounted) {
+            if (pDoc.exists()) setPlan({ id: pDoc.id, ...pDoc.data() } as Plan);
+            if (hDoc.exists()) setHouse({ id: hDoc.id, ...hDoc.data() } as House);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching voucher:", error);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchVoucher();
+
+    return () => { isMounted = false; };
   }, [voucherId]);
 
   const copyToClipboard = () => {
