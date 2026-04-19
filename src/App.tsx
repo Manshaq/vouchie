@@ -11,7 +11,7 @@ import { cn } from './lib/utils';
 import { RainbowButton } from './components/ui/rainbow-borders-button';
 import { RetroGrid } from './components/ui/retro-grid';
 import { ScrollVelocityContainer, ScrollVelocityRow } from './components/ui/scroll-based-velocity';
-import { usePaystackPayment } from 'react-paystack';
+import PaystackPop from '@paystack/inline-js';
 import { Toaster, toast } from 'sonner';
 
 // --- Components ---
@@ -604,23 +604,6 @@ const PaymentPage = () => {
     return unsub;
   }, [planId]);
 
-  const paystackConfig = {
-    reference: paymentRef,
-    email:     receiptEmail,
-    amount:    (plan?.price ?? 0) * 100,
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ?? "",
-    metadata: {
-      custom_fields: [
-        { display_name: "Plan ID",  variable_name: "planId",  value: plan?.id      ?? "" },
-        { display_name: "House ID", variable_name: "houseId", value: plan?.houseId ?? "" },
-      ],
-      planId:  plan?.id      ?? "",
-      houseId: plan?.houseId ?? "",
-    },
-  };
-
-  const initializePayment = usePaystackPayment(paystackConfig);
-
   const onSuccess = async (reference: any) => {
     try {
       setProcessing(true);
@@ -676,7 +659,23 @@ const PaymentPage = () => {
     }
 
     setProcessing(true);
-    initializePayment({ onSuccess, onClose });
+    const paystack = new PaystackPop();
+    paystack.newTransaction({
+      key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+      reference: paymentRef,
+      email: receiptEmail,
+      amount: (plan.price ?? 0) * 100,
+      metadata: {
+        custom_fields: [
+          { display_name: "Plan ID", variable_name: "planId", value: plan.id ?? "" },
+          { display_name: "House ID", variable_name: "houseId", value: plan.houseId ?? "" },
+        ],
+        planId: plan.id ?? "",
+        houseId: plan.houseId ?? "",
+      },
+      onSuccess,
+      onCancel: onClose,
+    });
   };
 
   if (loading) return <LoadingScreen />;
