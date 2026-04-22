@@ -1048,9 +1048,11 @@ const AdminDashboard = () => {
       ]);
     }
 
+    // Sanitize cell values to prevent CSV formula injection (cells starting with =, +, -, @)
+    const sanitizeCSV = (val: string) => /^[=+\-@\t\r]/.test(val) ? `'${val}` : val;
     const csvContent = [
       headers.join(','),
-      ...data.map(row => row.map((cell: any) => `"${cell}"`).join(','))
+      ...data.map(row => row.map((cell: any) => `"${sanitizeCSV(String(cell))}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

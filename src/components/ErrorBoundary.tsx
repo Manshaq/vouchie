@@ -30,15 +30,9 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      let errorMessage = 'An unexpected error occurred.';
-      try {
-        const errorJson = JSON.parse(this.state.error?.message || '');
-        if (errorJson.error) {
-          errorMessage = `Firestore Error: ${errorJson.error} during ${errorJson.operationType} on ${errorJson.path}`;
-        }
-      } catch (e) {
-        errorMessage = this.state.error?.message || errorMessage;
-      }
+      // Show generic message to users; log detailed error to console for debugging only
+      const errorMessage = 'Something went wrong. Please try again or contact support.';
+      console.error('ErrorBoundary caught:', this.state.error);
 
       return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">

@@ -54,7 +54,10 @@ service cloud.firestore {
     // A used voucher can be fetched explicitly by its ID by the customer (Result page),
     // but listing/querying is restricted to admins or the authenticated customer.
     match /vouchers/{voucherId} {
-      // Allow reading a specific used voucher if its doc ID is known
+      // Allow reading a specific used voucher if its doc ID is known.
+      // SECURITY NOTE: Unauthenticated get is required for guest checkout flow.
+      // Accepted risk: voucher IDs use nanoid(21) with ~126 bits of entropy,
+      // making brute-force infeasible. Voucher codes are NOT leaked via API responses.
       allow get:    if isAdmin() || resource.data.status == 'used';
 
       // Keep list restricted to prevent scanning. Unused vouchers have no customerEmail.

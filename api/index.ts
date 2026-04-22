@@ -65,7 +65,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ verify: (req: RequestWithRawBody, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: '16kb', verify: (req: RequestWithRawBody, _res, buf) => { req.rawBody = buf; } }));
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use(apiLimiter);
@@ -214,6 +214,7 @@ app.post("/api/paystack/webhook", async (req: RequestWithRawBody, res) => {
           status: "completed",
           createdAt: admin.firestore.Timestamp.now(),
           source: "webhook",
+          voucherId: voucherDoc.id,
         });
 
         webhookResult = { customerEmail, voucherCode };
@@ -264,6 +265,24 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
       return res.status(400).json({ error: "Payment verification failed" });
     }
 
+    // Verify planId matches what was embedded in Paystack metadata (prevents plan-swap attacks)
+    const verifiedPlanId = data.metadata?.planId;
+    if (planId !== verifiedPlanId) {
+      await writeLog("payment_plan_mismatch", `PlanId mismatch: body=${planId} vs metadata=${verifiedPlanId} (ref: ${reference})`);
+      return res.status(400).json({ error: "Plan mismatch — payment was for a different plan." });
+    }
+
+    // Verify the paid amount matches the plan price (prevents client-side amount tampering)
+    const planDocForVerify = await db.collection("plans").doc(planId).get();
+    if (!planDocForVerify.exists) {
+      return res.status(400).json({ error: "Plan not found." });
+    }
+    const expectedAmountKobo = (planDocForVerify.data()!.price || 0) * 100;
+    if (data.amount !== expectedAmountKobo) {
+      await writeLog("payment_amount_mismatch", `Amount mismatch: paid=${data.amount} expected=${expectedAmountKobo} (ref: ${reference})`);
+      return res.status(400).json({ error: "Amount mismatch — paid amount does not match plan price." });
+    }
+
     const verifiedEmail = typeof data.customer?.email === "string"
       ? data.customer.email.trim().toLowerCase().slice(0, 254)
       : "";
@@ -303,6 +322,7 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
         status: "completed",
         createdAt: admin.firestore.Timestamp.now(),
         source: "frontend",
+        voucherId: voucherDoc.id,
       });
 
       return { voucherId: voucherDoc.id, code: voucherCode };
@@ -320,7 +340,7 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
       }
     }
 
-    return res.status(200).json({ success: true, ...result });
+    return res.status(200).json({ success: true, voucherId: result.voucherId });
   } catch (error: any) {
     if (error.message === "Out of stock") return res.status(400).json({ error: "No vouchers available for this plan. Please contact support." });
     console.error("Payment complete error:", error.message);

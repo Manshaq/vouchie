@@ -16,7 +16,11 @@ import path from "path";
 import os from "os";
 
 // ── Parse environment ────────────────────────────────────────────────────────
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "belloaliyu808@gmail.com";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+if (!ADMIN_EMAIL) {
+  console.error("❌ ADMIN_EMAIL environment variable is required.");
+  process.exit(1);
+}
 const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
 
 if (!serviceAccountEnv) {

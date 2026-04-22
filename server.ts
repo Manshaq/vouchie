@@ -86,6 +86,7 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://*.firebaseio.com", "https://*.googleapis.com", "https://firestore.googleapis.com", "https://api.paystack.co", "wss://*.firebaseio.com"],
       frameSrc: ["'self'", "https://js.paystack.co", "https://www.google.com"],
+      frameAncestors: ["'self'"],
     },
   },
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
@@ -93,6 +94,7 @@ app.use(helmet({
 }));
 
 app.use(express.json({
+  limit: '16kb',
   verify: (req: RequestWithRawBody, _res, buf) => { req.rawBody = buf; },
 }));
 
@@ -270,7 +272,6 @@ app.post("/api/paystack/webhook", async (req: RequestWithRawBody, res) => {
           createdAt: admin.firestore.Timestamp.now(),
           source: "webhook",
           voucherId: voucherDoc.id,
-          voucherCode: voucherCode,
         });
 
         webhookResult = { customerEmail, voucherCode };
@@ -317,6 +318,24 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
     const { status, data } = paystackRes.data;
     if (!status || data.status !== 'success') {
       return res.status(400).json({ error: "Payment verification failed" });
+    }
+
+    // Verify planId matches what was embedded in Paystack metadata (prevents plan-swap attacks)
+    const verifiedPlanId = data.metadata?.planId;
+    if (planId !== verifiedPlanId) {
+      await writeLog("payment_plan_mismatch", `PlanId mismatch: body=${planId} vs metadata=${verifiedPlanId} (ref: ${reference})`);
+      return res.status(400).json({ error: "Plan mismatch — payment was for a different plan." });
+    }
+
+    // Verify the paid amount matches the plan price (prevents client-side amount tampering)
+    const planDocForVerify = await db.collection("plans").doc(planId).get();
+    if (!planDocForVerify.exists) {
+      return res.status(400).json({ error: "Plan not found." });
+    }
+    const expectedAmountKobo = (planDocForVerify.data()!.price || 0) * 100;
+    if (data.amount !== expectedAmountKobo) {
+      await writeLog("payment_amount_mismatch", `Amount mismatch: paid=${data.amount} expected=${expectedAmountKobo} (ref: ${reference})`);
+      return res.status(400).json({ error: "Amount mismatch — paid amount does not match plan price." });
     }
 
     const verifiedEmail = typeof data.customer?.email === 'string'
@@ -372,7 +391,6 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
         createdAt: admin.firestore.Timestamp.now(),
         source: "frontend",
         voucherId: voucherDoc.id,
-        voucherCode: voucherCode,
       });
 
       return { voucherId: voucherDoc.id, code: voucherCode };
@@ -391,7 +409,7 @@ app.post("/api/payment/complete", paymentLimiter, async (req: any, res) => {
       }
     }
 
-    return res.status(200).json({ success: true, emailSent, ...result });
+    return res.status(200).json({ success: true, emailSent, voucherId: result.voucherId });
   } catch (error: any) {
     if (error.message === "Out of stock") {
       return res.status(400).json({ error: "No vouchers available for this plan. Please contact support." });
