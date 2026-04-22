@@ -333,7 +333,7 @@ const MyVouchersPage = () => {
     }
 
     const unsubscribe = onSnapshot(
-      query(collection(db, 'vouchers'), where('customerEmail', '==', user.email), orderBy('createdAt', 'desc')),
+      query(collection(db, 'vouchers'), where('customerEmail', '==', user.email?.toLowerCase())),
       (snapshot) => {
         try {
           const myVouchers = snapshot.docs.map(doc => ({
@@ -341,8 +341,10 @@ const MyVouchersPage = () => {
             code: doc.data().code,
             planId: doc.data().planId,
             houseId: doc.data().houseId,
-            createdAt: doc.data().createdAt.toDate(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
           }));
+          
+          myVouchers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
           setVouchers(myVouchers);
         } catch (error) {
           console.error("Error processing vouchers:", error);

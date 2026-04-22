@@ -57,11 +57,10 @@ service cloud.firestore {
       // Allow reading a specific used voucher if its doc ID is known
       allow get:    if isAdmin() || resource.data.status == 'used';
 
-      // Keep list restricted to prevent scanning
+      // Keep list restricted to prevent scanning. Unused vouchers have no customerEmail.
       allow list:   if isAdmin()
                       || (
                            isAuthed()
-                           && resource.data.status == 'used'
                            && resource.data.customerEmail == myEmail()
                          );
 
