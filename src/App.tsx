@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
-import { Home, Layout, CreditCard, CheckCircle, ShieldCheck, Plus, Trash2, LogOut, LogIn, Copy, ExternalLink, AlertTriangle, ChevronRight, MapPin, Clock, Tag, Search, FileText, Activity, Layers, Mail, Lock, X } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
+import { Home, Layout, CreditCard, CheckCircle, ShieldCheck, Plus, Trash2, LogOut, LogIn, Copy, ExternalLink, AlertTriangle, ChevronRight, MapPin, Clock, Tag, Search, FileText, Activity, Layers, Mail, Lock, X, User } from 'lucide-react';
 import { FirebaseProvider, useFirebase } from './components/FirebaseProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 import { db, collection, getDocs, query, where, onSnapshot, doc, setDoc, Timestamp, signInWithPopup, signInWithRedirect, googleProvider, auth, runTransaction, getDoc, limit, orderBy, deleteDoc, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
@@ -130,13 +130,11 @@ const AuthModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
 };
     
 
-const Navbar = () => {
+const Navbar = ({ onOpenAuth }: { onOpenAuth: () => void }) => {
   const { user, isAdmin } = useFirebase();
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   return (
     <>
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <nav className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md border-b border-gray-100 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 md:gap-4">
@@ -146,14 +144,16 @@ const Navbar = () => {
               </div>
               <span className="hidden xs:inline">VoucherHub</span>
             </Link>
-            <Link to="/">
-              <RainbowButton className="h-8 md:h-9 px-3 md:px-4 text-xs md:text-sm font-bold flex items-center gap-1.5">
-                <Home className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span className="hidden sm:inline">Home</span>
-              </RainbowButton>
-            </Link>
+            <div className="hidden md:block">
+              <Link to="/">
+                <RainbowButton className="h-8 md:h-9 px-3 md:px-4 text-xs md:text-sm font-bold flex items-center gap-1.5">
+                  <Home className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span className="hidden sm:inline">Home</span>
+                </RainbowButton>
+              </Link>
+            </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="hidden md:flex items-center gap-2 md:gap-3">
             <Link to="/lookup">
               <RainbowButton className="h-8 md:h-9 px-3 md:px-4 text-xs md:text-sm font-bold flex items-center gap-1.5">
                 <Search className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -189,7 +189,7 @@ const Navbar = () => {
               </RainbowButton>
             ) : (
               <RainbowButton
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={onOpenAuth}
                 className="h-8 md:h-9 px-3 md:px-4 text-xs md:text-sm font-bold flex items-center gap-1.5"
               >
                 <LogIn className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -1632,17 +1632,89 @@ const AdminDashboard = () => {
 
 // --- Main App ---
 
+const MobileNav = ({ onOpenAuth }: { onOpenAuth: () => void }) => {
+  const { user, isAdmin } = useFirebase();
+  const location = useLocation();
+
+  const navItems = [
+    { name: 'Home', path: '/', icon: Home },
+    { name: 'Find', path: '/lookup', icon: Search },
+    ...(user ? [{ name: 'Vouchers', path: '/my-vouchers', icon: Tag }] : []),
+    ...(isAdmin ? [{ name: 'Admin', path: '/admin', icon: ShieldCheck }] : []),
+  ];
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 z-50 pb-safe">
+      <div className="flex justify-around items-center h-16 px-2">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.name}
+              to={item.path}
+              className={cn(
+                "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
+                isActive ? "text-gray-900" : "text-gray-400 hover:text-gray-600"
+              )}
+            >
+              <div className={cn(
+                "p-1.5 rounded-xl transition-all",
+                isActive ? "bg-gray-100 scale-110" : ""
+              )}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <span className={cn(
+                "text-[10px] font-bold",
+                isActive ? "text-gray-900" : "text-gray-500"
+              )}>
+                {item.name}
+              </span>
+            </Link>
+          );
+        })}
+        
+        {/* Auth / Profile Button */}
+        {user ? (
+          <button
+            onClick={() => auth.signOut()}
+            className="flex flex-col items-center justify-center w-full h-full space-y-1 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <div className="p-1.5 rounded-xl transition-all">
+              <LogOut className="w-5 h-5 text-red-500/80" />
+            </div>
+            <span className="text-[10px] font-bold text-gray-500">Sign Out</span>
+          </button>
+        ) : (
+          <button
+            onClick={onOpenAuth}
+            className="flex flex-col items-center justify-center w-full h-full space-y-1 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <div className="p-1.5 rounded-xl transition-all">
+              <User className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-bold text-gray-500">Sign In</span>
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+};
+
 const AppContent = () => {
   const { loading } = useFirebase();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   if (loading) return <LoadingScreen />;
 
   return (
-    <div className="min-h-screen bg-gray-50 relative overflow-hidden">
+    <div className="min-h-screen bg-gray-50 relative overflow-hidden pb-16 md:pb-0">
       <RetroGrid className="absolute inset-0 z-0 size-full" />
       <div className="rainbow-screen-edge"></div>
       <Toaster position="top-center" />
-      <Navbar />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <Navbar onOpenAuth={() => setIsAuthModalOpen(true)} />
+      <MobileNav onOpenAuth={() => setIsAuthModalOpen(true)} />
       <main className="relative z-10 p-3 sm:p-4 md:p-8 pt-20 md:pt-24 w-full max-w-7xl mx-auto">
         <Routes>
           <Route path="/" element={<HouseSelection />} />
